@@ -104,6 +104,12 @@ ANGLE repository is hosted by Chromium project and can be
 
 View the [Dev setup instructions](doc/DevSetup.md).
 
+### How to buld shader_translator
+```
+$ gn gen out/samples --root=samples --args="is_debug=false"
+$ autoninja -C out/samples
+```
+
 ## Contributing
 
 * Join our [Google group](https://groups.google.com/group/angleproject) to keep up to date.
