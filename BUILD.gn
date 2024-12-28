@@ -1616,6 +1616,14 @@ angle_executable("angle_shader_translator") {
 
     defines += [ "ANGLE_ENABLE_VULKAN" ]
   }
+
+  ldflags = [
+    "-dynamiclib",
+  ]
+
+  cflags = [
+      "-fPIC"
+    ]
 }
 
 if (angle_standalone || build_with_chromium || build_angle_end2end_tests_aosp) {
