@@ -14,6 +14,7 @@
 #include <sstream>
 #include <vector>
 #include "angle_gl.h"
+#include <iostream>
 
 #if defined(ANGLE_ENABLE_VULKAN)
 // SPIR-V tools include for disassembly.
@@ -47,7 +48,6 @@ static bool ReadShaderSource(const char *fileName, ShaderSource &source);
 static void FreeShaderSource(ShaderSource &source);
 
 static bool ParseGLSLOutputVersion(const std::string &, ShShaderOutput *outResult);
-static bool ParseIntValue(const std::string &, int emptyDefault, int *outValue);
 
 static void PrintSpirv(const sh::BinaryBlob &blob);
 
@@ -75,9 +75,10 @@ void GenerateResources(ShBuiltInResources *resources)
     resources->APPLE_clip_distance       = 0;
 }
 
-int main(int argc, char *argv[])
-{
+extern "C" const char* __attribute__((visibility("default"))) trans(char *argv[]) {
     TFailCode failCode = ESuccess;
+
+    std::cout << argv[1] << std::endl;
 
     ShCompileOptions compileOptions = {};
     int numCompiles                 = 0;
@@ -97,295 +98,132 @@ int main(int argc, char *argv[])
 
     bool printActiveVariables = false;
 
-    argc--;
-    argv++;
-    for (; (argc >= 1) && (failCode == ESuccess); argc--, argv++)
+    spec = SH_WEBGL2_SPEC;
+    if (!ParseGLSLOutputVersion("410", &output)) {
+        failCode = EFailUsage;
+    }
+    compileOptions.initializeUninitializedLocals = true;
+    compileOptions.objectCode = true;
+
+   if (spec != SH_GLES2_SPEC && spec != SH_WEBGL_SPEC) {
+        resources.MaxDrawBuffers             = 8;
+        resources.MaxVertexTextureImageUnits = 16;
+        resources.MaxTextureImageUnits       = 16;
+    }
+
+    ShHandle compiler = 0;
+    switch (FindShaderType(argv[1]))
     {
-        if (argv[0][0] == '-')
-        {
-            switch (argv[0][1])
+        case GL_VERTEX_SHADER:
+            if (vertexCompiler == 0)
             {
-                case 'i':
-                    compileOptions.intermediateTree = true;
-                    break;
-                case 'o':
-                    compileOptions.objectCode = true;
-                    break;
-                case 'u':
-                    printActiveVariables = true;
-                    break;
-                case 's':
-                    if (argv[0][2] == '=')
-                    {
-                        switch (argv[0][3])
-                        {
-                            case 'e':
-                                if (argv[0][4] == '3')
-                                {
-                                    if (argv[0][5] == '1')
-                                    {
-                                        spec = SH_GLES3_1_SPEC;
-                                    }
-                                    else if (argv[0][5] == '2')
-                                    {
-                                        spec = SH_GLES3_2_SPEC;
-                                    }
-                                    else
-                                    {
-                                        spec = SH_GLES3_SPEC;
-                                    }
-                                }
-                                else
-                                {
-                                    spec = SH_GLES2_SPEC;
-                                }
-                                break;
-                            case 'w':
-                                if (argv[0][4] == '3')
-                                {
-                                    spec = SH_WEBGL3_SPEC;
-                                }
-                                else if (argv[0][4] == '2')
-                                {
-                                    spec = SH_WEBGL2_SPEC;
-                                }
-                                else if (argv[0][4] == 'n')
-                                {
-                                    spec = SH_WEBGL_SPEC;
-                                }
-                                else
-                                {
-                                    spec                            = SH_WEBGL_SPEC;
-                                    resources.FragmentPrecisionHigh = 1;
-                                }
-                                break;
-                            default:
-                                failCode = EFailUsage;
-                        }
-                    }
-                    else
-                    {
-                        failCode = EFailUsage;
-                    }
-                    break;
-                case 'b':
-                    if (argv[0][2] == '=')
-                    {
-                        switch (argv[0][3])
-                        {
-                            case 'e':
-                                output                                       = SH_ESSL_OUTPUT;
-                                compileOptions.initializeUninitializedLocals = true;
-                                break;
-                            case 'g':
-                                if (!ParseGLSLOutputVersion(&argv[0][sizeof("-b=g") - 1], &output))
-                                {
-                                    failCode = EFailUsage;
-                                }
-                                compileOptions.initializeUninitializedLocals = true;
-                                break;
-                            case 'v':
-                                output = SH_SPIRV_VULKAN_OUTPUT;
-                                compileOptions.initializeUninitializedLocals = true;
-                                break;
-                            case 'h':
-                                if (argv[0][4] == '1' && argv[0][5] == '1')
-                                {
-                                    output = SH_HLSL_4_1_OUTPUT;
-                                }
-                                else
-                                {
-                                    output = SH_HLSL_3_0_OUTPUT;
-                                }
-                                break;
-                            case 'm':
-                                output = SH_MSL_METAL_OUTPUT;
-                                break;
-                            default:
-                                failCode = EFailUsage;
-                        }
-                    }
-                    else
-                    {
-                        failCode = EFailUsage;
-                    }
-                    break;
-                case 'x':
-                    if (argv[0][2] == '=')
-                    {
-                        // clang-format off
-                    switch (argv[0][3])
-                    {
-                      case 'i': resources.OES_EGL_image_external = 1; break;
-                      case 'd': resources.OES_standard_derivatives = 1; break;
-                      case 'r': resources.ARB_texture_rectangle = 1; break;
-                      case 'b':
-                          if (ParseIntValue(&argv[0][sizeof("-x=b") - 1], 1,
-                                            &resources.MaxDualSourceDrawBuffers))
-                          {
-                              resources.EXT_blend_func_extended = 1;
-                          }
-                          else
-                          {
-                              failCode = EFailUsage;
-                          }
-                          break;
-                      case 'w':
-                          if (ParseIntValue(&argv[0][sizeof("-x=w") - 1], 1,
-                                            &resources.MaxDrawBuffers))
-                          {
-                              resources.EXT_draw_buffers = 1;
-                          }
-                          else
-                          {
-                              failCode = EFailUsage;
-                          }
-                          break;
-                      case 'g': resources.EXT_frag_depth = 1; break;
-                      case 'l': resources.EXT_shader_texture_lod = 1; break;
-                      case 'f': resources.EXT_shader_framebuffer_fetch = 1; break;
-                      case 'n': resources.NV_shader_framebuffer_fetch = 1; break;
-                      case 'a': resources.ARM_shader_framebuffer_fetch = 1; break;
-                      case 'm':
-                          resources.OVR_multiview2 = 1;
-                          resources.OVR_multiview = 1;
-                          compileOptions.initializeBuiltinsForInstancedMultiview = true;
-                          compileOptions.selectViewInNvGLSLVertexShader = true;
-                          break;
-                      case 'y': resources.EXT_YUV_target = 1; break;
-                      case 's': resources.OES_sample_variables = 1; break;
-                      default: failCode = EFailUsage;
-                    }
-                        // clang-format on
-                    }
-                    else
-                    {
-                        failCode = EFailUsage;
-                    }
-                    break;
-                default:
-                    failCode = EFailUsage;
+                vertexCompiler =
+                    sh::ConstructCompiler(GL_VERTEX_SHADER, spec, output, &resources);
             }
+            compiler = vertexCompiler;
+            break;
+        case GL_FRAGMENT_SHADER:
+            if (fragmentCompiler == 0)
+            {
+                fragmentCompiler =
+                    sh::ConstructCompiler(GL_FRAGMENT_SHADER, spec, output, &resources);
+            }
+            compiler = fragmentCompiler;
+            break;
+        case GL_COMPUTE_SHADER:
+            if (computeCompiler == 0)
+            {
+                computeCompiler =
+                    sh::ConstructCompiler(GL_COMPUTE_SHADER, spec, output, &resources);
+            }
+            compiler = computeCompiler;
+            break;
+        case GL_GEOMETRY_SHADER_EXT:
+            if (geometryCompiler == 0)
+            {
+                resources.EXT_geometry_shader = 1;
+                geometryCompiler =
+                    sh::ConstructCompiler(GL_GEOMETRY_SHADER_EXT, spec, output, &resources);
+            }
+            compiler = geometryCompiler;
+            break;
+        case GL_TESS_CONTROL_SHADER_EXT:
+            if (tessControlCompiler == 0)
+            {
+                assert(spec == SH_GLES3_1_SPEC || spec == SH_GLES3_2_SPEC);
+                resources.EXT_tessellation_shader = 1;
+                tessControlCompiler = sh::ConstructCompiler(GL_TESS_CONTROL_SHADER_EXT,
+                                                            spec, output, &resources);
+            }
+            compiler = tessControlCompiler;
+            break;
+        case GL_TESS_EVALUATION_SHADER_EXT:
+            if (tessEvalCompiler == 0)
+            {
+                assert(spec == SH_GLES3_1_SPEC || spec == SH_GLES3_2_SPEC);
+                resources.EXT_tessellation_shader = 1;
+                tessEvalCompiler = sh::ConstructCompiler(GL_TESS_EVALUATION_SHADER_EXT,
+                                                            spec, output, &resources);
+            }
+            compiler = tessEvalCompiler;
+            break;
+        default:
+            break;
+    }
+
+    if (compiler)
+    {
+        switch (output)
+        {
+            case SH_HLSL_3_0_OUTPUT:
+            case SH_HLSL_4_1_OUTPUT:
+                compileOptions.selectViewInNvGLSLVertexShader = false;
+                break;
+            default:
+                break;
         }
-        else
+
+        bool compiled = CompileFile(argv[1], compiler, compileOptions);
+
+        LogMsg("BEGIN", "COMPILER", numCompiles, "INFO LOG");
+        std::string log = sh::GetInfoLog(compiler);
+        puts(log.c_str());
+        LogMsg("END", "COMPILER", numCompiles, "INFO LOG");
+        printf("\n\n");
+
+        if (compiled && compileOptions.objectCode)
         {
-            if (spec != SH_GLES2_SPEC && spec != SH_WEBGL_SPEC)
+            LogMsg("BEGIN", "COMPILER", numCompiles, "OBJ CODE");
+            if (output != SH_SPIRV_VULKAN_OUTPUT)
             {
-                resources.MaxDrawBuffers             = 8;
-                resources.MaxVertexTextureImageUnits = 16;
-                resources.MaxTextureImageUnits       = 16;
-            }
-            ShHandle compiler = 0;
-            switch (FindShaderType(argv[0]))
-            {
-                case GL_VERTEX_SHADER:
-                    if (vertexCompiler == 0)
-                    {
-                        vertexCompiler =
-                            sh::ConstructCompiler(GL_VERTEX_SHADER, spec, output, &resources);
-                    }
-                    compiler = vertexCompiler;
-                    break;
-                case GL_FRAGMENT_SHADER:
-                    if (fragmentCompiler == 0)
-                    {
-                        fragmentCompiler =
-                            sh::ConstructCompiler(GL_FRAGMENT_SHADER, spec, output, &resources);
-                    }
-                    compiler = fragmentCompiler;
-                    break;
-                case GL_COMPUTE_SHADER:
-                    if (computeCompiler == 0)
-                    {
-                        computeCompiler =
-                            sh::ConstructCompiler(GL_COMPUTE_SHADER, spec, output, &resources);
-                    }
-                    compiler = computeCompiler;
-                    break;
-                case GL_GEOMETRY_SHADER_EXT:
-                    if (geometryCompiler == 0)
-                    {
-                        resources.EXT_geometry_shader = 1;
-                        geometryCompiler =
-                            sh::ConstructCompiler(GL_GEOMETRY_SHADER_EXT, spec, output, &resources);
-                    }
-                    compiler = geometryCompiler;
-                    break;
-                case GL_TESS_CONTROL_SHADER_EXT:
-                    if (tessControlCompiler == 0)
-                    {
-                        assert(spec == SH_GLES3_1_SPEC || spec == SH_GLES3_2_SPEC);
-                        resources.EXT_tessellation_shader = 1;
-                        tessControlCompiler = sh::ConstructCompiler(GL_TESS_CONTROL_SHADER_EXT,
-                                                                    spec, output, &resources);
-                    }
-                    compiler = tessControlCompiler;
-                    break;
-                case GL_TESS_EVALUATION_SHADER_EXT:
-                    if (tessEvalCompiler == 0)
-                    {
-                        assert(spec == SH_GLES3_1_SPEC || spec == SH_GLES3_2_SPEC);
-                        resources.EXT_tessellation_shader = 1;
-                        tessEvalCompiler = sh::ConstructCompiler(GL_TESS_EVALUATION_SHADER_EXT,
-                                                                 spec, output, &resources);
-                    }
-                    compiler = tessEvalCompiler;
-                    break;
-                default:
-                    break;
-            }
-            if (compiler)
-            {
-                switch (output)
-                {
-                    case SH_HLSL_3_0_OUTPUT:
-                    case SH_HLSL_4_1_OUTPUT:
-                        compileOptions.selectViewInNvGLSLVertexShader = false;
-                        break;
-                    default:
-                        break;
-                }
+                //std::cout << "test" << std::endl;
+                const std::string &code = sh::GetObjectCode(compiler);
 
-                bool compiled = CompileFile(argv[0], compiler, compileOptions);
-
-                LogMsg("BEGIN", "COMPILER", numCompiles, "INFO LOG");
-                std::string log = sh::GetInfoLog(compiler);
-                puts(log.c_str());
-                LogMsg("END", "COMPILER", numCompiles, "INFO LOG");
-                printf("\n\n");
-
-                if (compiled && compileOptions.objectCode)
-                {
-                    LogMsg("BEGIN", "COMPILER", numCompiles, "OBJ CODE");
-                    if (output != SH_SPIRV_VULKAN_OUTPUT)
-                    {
-                        const std::string &code = sh::GetObjectCode(compiler);
-                        puts(code.c_str());
-                    }
-                    else
-                    {
-                        const sh::BinaryBlob &blob = sh::GetObjectBinaryBlob(compiler);
-                        PrintSpirv(blob);
-                    }
-                    LogMsg("END", "COMPILER", numCompiles, "OBJ CODE");
-                    printf("\n\n");
-                }
-                if (compiled && printActiveVariables)
-                {
-                    LogMsg("BEGIN", "COMPILER", numCompiles, "VARIABLES");
-                    PrintActiveVariables(compiler);
-                    LogMsg("END", "COMPILER", numCompiles, "VARIABLES");
-                    printf("\n\n");
-                }
-                if (!compiled)
-                    failCode = EFailCompile;
-                ++numCompiles;
+                return code.c_str();
+                //puts(code.c_str());
             }
             else
             {
-                failCode = EFailCompilerCreate;
+                const sh::BinaryBlob &blob = sh::GetObjectBinaryBlob(compiler);
+                PrintSpirv(blob);
             }
+            LogMsg("END", "COMPILER", numCompiles, "OBJ CODE");
+            printf("\n\n");
         }
+        if (compiled && printActiveVariables)
+        {
+            LogMsg("BEGIN", "COMPILER", numCompiles, "VARIABLES");
+            PrintActiveVariables(compiler);
+            LogMsg("END", "COMPILER", numCompiles, "VARIABLES");
+            printf("\n\n");
+        }
+        if (!compiled)
+            failCode = EFailCompile;
+        ++numCompiles;
+    }
+    else
+    {
+        failCode = EFailCompilerCreate;
     }
 
     if ((vertexCompiler == 0) && (fragmentCompiler == 0) && (computeCompiler == 0) &&
@@ -425,7 +263,12 @@ int main(int argc, char *argv[])
 
     sh::Finalize();
 
-    return failCode;
+    return "NO";
+}
+
+int main(int argc, char *argv[])
+{
+    trans(argv);
 }
 
 //
@@ -889,24 +732,6 @@ static bool ParseGLSLOutputVersion(const std::string &num, ShShaderOutput *outRe
             break;
     }
     return false;
-}
-
-static bool ParseIntValue(const std::string &num, int emptyDefault, int *outValue)
-{
-    if (num.length() == 0)
-    {
-        *outValue = emptyDefault;
-        return true;
-    }
-
-    std::istringstream input(num);
-    int value;
-    if (!(input >> value && input.eof()))
-    {
-        return false;
-    }
-    *outValue = value;
-    return true;
 }
 
 static void PrintSpirv(const sh::BinaryBlob &blob)
