@@ -75,10 +75,10 @@ void GenerateResources(ShBuiltInResources *resources)
     resources->APPLE_clip_distance       = 0;
 }
 
-extern "C" const char* __attribute__((visibility("default"))) trans(char *argv[]) {
+extern "C" const char* __attribute__((visibility("default"))) trans(char *filename) {
     TFailCode failCode = ESuccess;
 
-    std::cout << argv[1] << std::endl;
+    //std::cout << argv[1] << std::endl;
 
     ShCompileOptions compileOptions = {};
     int numCompiles                 = 0;
@@ -112,7 +112,7 @@ extern "C" const char* __attribute__((visibility("default"))) trans(char *argv[]
     }
 
     ShHandle compiler = 0;
-    switch (FindShaderType(argv[1]))
+    switch (FindShaderType(filename))
     {
         case GL_VERTEX_SHADER:
             if (vertexCompiler == 0)
@@ -183,21 +183,22 @@ extern "C" const char* __attribute__((visibility("default"))) trans(char *argv[]
                 break;
         }
 
-        bool compiled = CompileFile(argv[1], compiler, compileOptions);
+        bool compiled = CompileFile(filename, compiler, compileOptions);
 
-        LogMsg("BEGIN", "COMPILER", numCompiles, "INFO LOG");
+        //LogMsg("BEGIN", "COMPILER", numCompiles, "INFO LOG");
         std::string log = sh::GetInfoLog(compiler);
-        puts(log.c_str());
-        LogMsg("END", "COMPILER", numCompiles, "INFO LOG");
+        //puts(log.c_str());
+        //LogMsg("END", "COMPILER", numCompiles, "INFO LOG");
         printf("\n\n");
 
         if (compiled && compileOptions.objectCode)
         {
-            LogMsg("BEGIN", "COMPILER", numCompiles, "OBJ CODE");
+            //LogMsg("BEGIN", "COMPILER", numCompiles, "OBJ CODE");
             if (output != SH_SPIRV_VULKAN_OUTPUT)
             {
                 //std::cout << "test" << std::endl;
                 const std::string &code = sh::GetObjectCode(compiler);
+                //puts(code.c_str());
 
                 return code.c_str();
                 //puts(code.c_str());
@@ -268,7 +269,7 @@ extern "C" const char* __attribute__((visibility("default"))) trans(char *argv[]
 
 int main(int argc, char *argv[])
 {
-    trans(argv);
+    trans(argv[1]);
 }
 
 //
